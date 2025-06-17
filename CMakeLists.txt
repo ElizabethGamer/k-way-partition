@@ -11,7 +11,7 @@ include_directories(include)
 file(GLOB_RECURSE SOURCES "src/*.cpp")
 
 # Create executable
-add_executable(benchmark ${SOURCES})
+add_executable(kway ${SOURCES})
 
 # Include Parlay
 find_package(Parlay REQUIRED)

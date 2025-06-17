@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/kway.dir/src/main.cpp.o -o kway 
