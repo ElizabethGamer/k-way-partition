@@ -51,8 +51,8 @@ int readBlock(T* src, T* dest, size_t amt, int dest_offset, size_t dest_size){
   return (dest_offset + amt) % dest_size;
 }
 
-template<typename T, typename compare>
-void partition(parlay::sequence<T> range, size_t num_workers, compare comp, size_t num_buckets, parlay::sequence<int>& pivots){
+template<typename T>
+void partition(parlay::sequence<T> range, size_t num_workers, size_t num_buckets, parlay::sequence<int>& pivots){
   int n = range.size();
   int b = 5000; // elements per block; can change later
 
@@ -61,6 +61,7 @@ void partition(parlay::sequence<T> range, size_t num_workers, compare comp, size
   parlay::sequence<size_t> offsets(num_buckets);
   parlay::internal::map(range, [&](long i) {
     offsets[ss.find(range[i], std::less<int>())]++;
+    return i;
   }, 256);
   parlay::scan_inplace(offsets);
 
@@ -69,16 +70,16 @@ void partition(parlay::sequence<T> range, size_t num_workers, compare comp, size
     return range.begin() + offsets[i] + i; // accounting for the space for pivots
   });
   auto read = parlay::tabulate(num_buckets, [&](long i){
-      return i == num_buckets? range.end() - 1 : &write[i + 1] - 2;
+      return i == num_buckets? range.end() - 1 : write[i + 1] - 2;
   });
   
   parlay::parallel_for(0, num_workers, [&](long i) {
     // swap and bucket buffers
     // can't figure out what data structure would be good. would appreciate advice/optimization
     int buffersize = num_buckets * (b+ 1);
-    parlay::delayed_sequence<T> swap(buffersize);
+    parlay::sequence<T> swap(buffersize);
     auto bucket_buffers = parlay::tabulate(num_buckets, [&](long i) {
-      return parlay::delayed_sequence<T>(b);
+      return parlay::sequence<T>(b);
     });
 
     // current positions within buffers
@@ -95,7 +96,7 @@ void partition(parlay::sequence<T> range, size_t num_workers, compare comp, size
     // go through all buckets
     for (int i = 0; i < num_buckets; i++){
       while (read[curr_bucket] - write[curr_bucket] >= 0){ // get rid of the race condition here later
-        int amt = min(b, read[curr_bucket] - write[curr_bucket] + 1); // in case there's less than b elements left
+        int amt = std::min(b, read[curr_bucket] - write[curr_bucket] + 1); // in case there's less than b elements left
         T* src = read[curr_bucket].std::atomic<T>::fetch_add(-amt);
         src -= (amt - 1); // access the start of the block to hopefully bring it into cache at once
 
